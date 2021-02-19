@@ -20,8 +20,9 @@ public class DnsClient {
     // start at 1 because first arg is DnsClient
     int i;
     for(i = 0; i < args.length; i++) {
-//      System.out.println("args[i] = "+args[i]+", i="+i);
-      if(args[i].equals("-t")) {
+    	System.out.println("args[i] = "+args[i]+", i="+i);
+      if(args[i].contains("-t")) {
+    	  System.out.println("In if");
         timeout = Integer.parseInt(args[i+1]) * 1000;
         i++;
         continue;
@@ -44,18 +45,26 @@ public class DnsClient {
         serverType = "NS";
         continue;
       }
-      ipAddress = convertToIP(args[i]);
-      i++;
-      name = args[i];
-      
-      // Update the size needed for QNAME
-      for (String word : name.split("//.")) {
-    	  QNAME_size += (1 + word.length());
+      else if (args[i].charAt(0) == '@'){
+    	  if (args[i].charAt(0) != '@') {
+    	      //@TODO good errors
+    	      System.out.println("invalid ip format");
+    	    }
+    	  ipAddress = convertToIP(args[i]);
+
+    	  i++;
+    	  name = args[i];
+
+    	  // Update the size needed for QNAME
+    	  for (String word : name.split("\\.")) {
+    		  QNAME_size += (1 + word.length());
+    	  }
+    	  QNAME_size++;
       }
-      QNAME_size++;
+      else System.out.println("Invalid format");
     }
     
-    System.out.println("DnsClient sending request for "+name+"\n Server: "+args[i-2]+"\n Request type: "+serverType);
+    System.out.println("DnsClient sending request for "+name+"\nServer: "+args[i-2]+"\nRequest type: "+serverType);
     
     System.out.println("ip address: "+Arrays.toString(ipAddress));
     
@@ -67,10 +76,7 @@ public class DnsClient {
   }
   
   public static byte[] convertToIP(String s) {
-    if (s.charAt(0) != '@') {
-      //@TODO good errors
-      System.out.println("invalid ip format");
-    }
+    System.out.println("IP " + s);
     
     s = s.replace("@", "");
     
@@ -113,7 +119,7 @@ public class DnsClient {
       
       // Fill out QNAME section
       int index = 12;
-      for (String word : name.split("//.")) {
+      for (String word : name.split("\\.")) {
     	  sendDNSbytes[index] = (byte) word.length();
     	  index++;
     	  for (int i = 0; i < word.length(); i++, index++) {
@@ -123,6 +129,7 @@ public class DnsClient {
       sendDNSbytes[index] = (byte) 0x00; // End QNAME with byte 0
       index++;
       sendDNSbytes[index] = (byte) 0x00; // Start QTYPE with byte 0
+      index++;
       if (serverType.equals("MX")) {
     	  sendDNSbytes[index] = (byte) 0x0f; 
     	  index++;
@@ -139,6 +146,8 @@ public class DnsClient {
       index++;
       sendDNSbytes[index] = (byte) 0x01; // QCLASS = 0x0001
       
+      System.out.println("Byte array is: "+Arrays.toString(sendDNSbytes));
+      
       // No need for other sections of packet?
       
       // Send the created packet
@@ -152,7 +161,7 @@ public class DnsClient {
       clientSocket.send(sendPacket);
       clientSocket.receive(receivePacket);
       clientSocket.close();
-      double timeTaken = (double)((System.nanoTime() - startTime) / 1000000000);
+      double timeTaken = ((double)(System.nanoTime() - startTime)) / 1000000000;
       
       System.out.println("Response received after "+timeTaken+" seconds and ? retries");
       
