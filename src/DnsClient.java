@@ -5,24 +5,24 @@ import java.util.Random;
 
 
 public class DnsClient {
+  public static int timeout = 5000;
+  public static int maxRetries = 3;
+  public static int port = 53;
+  public static String serverType = "A"; // serverType = 0 if IP address (A), 1 if mail server (MX), 2 if name server (NS)   
+  public static byte[] ipAddress = new byte[4];
+  public static String name = "";
+  public static int QNAME_size = 0;
   
   
   public static void main(String[] args) throws IOException {
-    int timeout = 5000;;
-    int maxRetries = 3;
-    int port = 53;
-    String serverType = "A"; // serverType = 0 if IP address (A), 1 if mail server (MX), 2 if name server (NS)   
-    byte[] ipAddress = new byte[4];
-    String name = "";
-    int QNAME_size = 0;
-    
+   
     // parsing arguments
     // start at 1 because first arg is DnsClient
     int i;
     for(i = 0; i < args.length; i++) {
-    	System.out.println("args[i] = "+args[i]+", i="+i);
+//      System.out.println("args[i] = "+args[i]+", i="+i);
       if(args[i].contains("-t")) {
-    	  System.out.println("In if");
+//    	System.out.println("In if");
         timeout = Integer.parseInt(args[i+1]) * 1000;
         i++;
         continue;
@@ -67,12 +67,11 @@ public class DnsClient {
     System.out.println("DnsClient sending request for "+name+"\nServer: "+args[i-2]+"\nRequest type: "+serverType);
     
     System.out.println("ip address: "+Arrays.toString(ipAddress));
-    
-    sendRequest(timeout, ipAddress, name, serverType, port, QNAME_size);
-    
-//    System.out.println("timeout="+timeout+", maxRetries="+maxRetries+", port="+port+", serverType="+serverType);
-//    System.out.println("server="+server+", name="+name);
-    
+    System.out.println("timeout="+timeout+", maxRetries="+maxRetries+", port="+port+", serverType="+serverType);
+    System.out.println("server="+name+", name="+name);
+        
+    receiveResponse(sendRequest(0));
+ 
   }
   
   public static byte[] convertToIP(String s) {
@@ -90,8 +89,7 @@ public class DnsClient {
     return ip;
   }
   
-  public static void sendRequest(int timeout, byte[] ipAddress, String name, 
-		  String serverType, int port, int QNAME_size) throws IOException {
+  public static byte[] sendRequest(int retries) throws IOException {
     try {
       DatagramSocket clientSocket = new DatagramSocket();
       clientSocket.setSoTimeout(timeout);
@@ -163,13 +161,60 @@ public class DnsClient {
       clientSocket.close();
       double timeTaken = ((double)(System.nanoTime() - startTime)) / 1000000000;
       
-      System.out.println("Response received after "+timeTaken+" seconds and ? retries");
+      System.out.println("Response received after "+timeTaken+" seconds and "+retries+" retries");
+      return receiveDNSbytes;
       
       
-      
-    } catch (SocketException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
-    } 
-  }  
+    } catch (SocketTimeoutException e) {
+      System.out.println("Timeout"); //TODO better error message
+      if(retries < maxRetries) {
+        retries++;
+        sendRequest(retries);
+      } else {
+        throw new SocketTimeoutException("ERROR\tMaximum number of retries "+maxRetries+" exceeded.");
+      }
+    } catch (Exception e) {
+      throw e;
+    }
+    return null;
+  }
+  
+  public static void receiveResponse(byte[] data) {
+    int numAnswers = ((data[6] & 0xff) << 8) + (data[7] & 0xff);;
+    System.out.println("***Answer Section ("+numAnswers+" records)***");
+    
+    System.out.println(Arrays.toString(data));
+    
+    byte responseType = data[16 + QNAME_size];
+    switch(responseType) {
+      case 0x01: 
+        //type A
+        System.out.println("A");
+        break;
+      case 0x02: 
+        //type NS
+        System.out.println("NS");
+        break;
+      case 0x05:
+        //type CNAME
+        System.out.println("CNAME");
+        break;
+      case 0x0f:
+        //type MX
+        System.out.println("MX");
+        break;
+      default:
+        System.out.println("no valid type detected"); //TODO error
+        
+    }
+    
+    /*
+     * P <tab> [ip address] <tab> [seconds can cache] <tab> [auth | nonauth]
+        CNAME <tab> [alias] <tab> [seconds can cache] <tab> [auth | nonauth]
+        MX <tab> [alias] <tab> [pref] <tab> [seconds can cache] <tab> [auth | nonauth] 
+        NS <tab> [alias] <tab> [seconds can cache] <tab> [auth | nonauth]
+     */
+    
+  }
+  
 }
