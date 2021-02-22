@@ -1,5 +1,3 @@
-// TODO Format errors like in handout, recursive queries?, comment
-
 import java.io.*;
 import java.net.*;
 import java.nio.ByteBuffer;
@@ -23,7 +21,7 @@ public class DnsClient {
     int i;
     
     if(args.length < 2) {
-      System.out.println("ERROR: Incorrect input syntax");
+      System.out.println("ERROR \tIncorrect input syntax");
       return;
     }
     
@@ -194,6 +192,26 @@ public class DnsClient {
     int i = 16 + QNAME_size; 
     i = analyzeResponse(numAnswers, i, data);
 
+    // check if authoritative records were found (ANCOUNT)
+    int numAuthoritative = ((data[8] & 0xff) << 8) + (data[9] & 0xff);
+    
+    // skip all authoritative responses
+    for (int auth_i = 0; auth_i < numAuthoritative; auth_i++) {
+      // advance to type bit
+      while (data[i] != 0) i++;
+      i++;
+      if (data[i - 3] != -64) i+=3;
+      
+      // if type MX, increment index by 11
+      if(data[i] == 15) {
+        i += 11;
+      }
+      // all other types increment by 9
+      else {
+        i+= 9;
+      }
+    }
+    
     // check if additional records were found
     int numAdditional = ((data[10] & 0xff) << 8) + (data[11] & 0xff);
 
@@ -272,8 +290,6 @@ public class DnsClient {
           
         //type MX
         case 15:          
-          System.out.println("MX");
-
           // Getting pref
           int pref = Byte.toUnsignedInt(data[i+9])*256 + Byte.toUnsignedInt(data[i+10]);
 
@@ -284,9 +300,11 @@ public class DnsClient {
 
           System.out.println("MX\t"+alias2.substring(0, (alias2.length() - 1))+"\t"+pref+"\tseconds can cache\t"+TTL+"\t"+auth);
           i += 11;
+          
+          
           break;
         default:
-          System.out.println("ERROR: no valid type detected"); 
+          System.out.println("ERROR\tno valid type detected"); 
       }
     }
 
@@ -305,7 +323,7 @@ public class DnsClient {
     String sSplit[] = s.split("\\.");
 
     if(sSplit.length != 4) {
-      throw new Exception ("ERROR: Incorrect IP address format");
+      throw new Exception ("ERROR\tIncorrect IP address format");
     }
 
     byte[] ip = new byte[4];
@@ -355,13 +373,13 @@ public class DnsClient {
   // error handling helper method
   public static Boolean handleResponseErrors(byte[] data) {
     // QR should = 1
-    if ((data[2] & 1) != 1) {
-      System.out.println("ERROR: Not a response");
+    if (((data[2]>>7) & 1) != 1) {
+      System.out.println("ERROR\tNot a response");
       return false;
     }
     
     // RA should = 1
-    if ((data[3] & 1) != 1) {
+    if (((data[3]>>7) & 1) != 1) {
       System.out.println("Server does not support recursive queries");
     }
     
@@ -371,28 +389,28 @@ public class DnsClient {
       case 0: 
         break;
       case 1: 
-        System.out.println("ERROR: Format error: the name server was unable to interpret the query");
+        System.out.println("ERROR\tFormat error: the name server was unable to interpret the query");
         return false;
       case 2: 
-        System.out.println("ERROR: Server failure: the name server was unable to process this query due to a problem with the name server");
+        System.out.println("ERROR\tServer failure: the name server was unable to process this query due to a problem with the name server");
         return false;
       case 3: 
         if ( ((data[2] >> 5) & 1) == 0) {
-          System.out.println("NOTFOUND: the domain name referenced in the query does not exist");
+          System.out.println("NOTFOUND\tthe domain name referenced in the query does not exist");
           return false;
         }  
         break;
       case 4: 
-        System.out.println("ERROR: Not implemented: the name server does not support the requested kind of query");
+        System.out.println("ERROR\tNot implemented: the name server does not support the requested kind of query");
         return false;
       case 5: 
-        System.out.println("ERROR: Refused: the name server refuses to perform the requested operation for policy reasons");
+        System.out.println("ERROR\tRefused: the name server refuses to perform the requested operation for policy reasons");
         return false;
     }
     
     // CLASS should = 0x0001
     if (data[12 + QNAME_size + 2] != 0 && data[12+QNAME_size+3] != 1) {
-      System.out.println("ERROR: Unexpected class value");
+      System.out.println("ERROR\tUnexpected class value");
       return false;
     }
     
