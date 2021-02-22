@@ -1,7 +1,8 @@
+// TODO Format errors like in handout, recursive queries?, comment
+
 import java.io.*;
 import java.net.*;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Random;
 
 public class DnsClient {
@@ -154,7 +155,7 @@ public class DnsClient {
       sendDNSbytes[index] = (byte) 0x01; 
 
       // Send the created packet
-      byte[] receiveDNSbytes = new byte[128]; // Unsure about size
+      byte[] receiveDNSbytes = new byte[300]; // Unsure about size
       DatagramPacket sendPacket = new DatagramPacket(sendDNSbytes, sendDNSbytes.length, address, port);
       DatagramPacket receivePacket = new DatagramPacket(receiveDNSbytes, receiveDNSbytes.length);
 
@@ -217,6 +218,8 @@ public class DnsClient {
       // advance to QTYPE bit
       while (data[i] != 0) i++;
       i++;
+  	  if (data[i - 3] != -64) i+=3;
+
 
       // Get the "seconds can cache" (TTL)
       byte[] TTLBytes = new byte[4];
@@ -307,7 +310,7 @@ public class DnsClient {
 
     byte[] ip = new byte[4];
     for(int i = 0; i < sSplit.length; i++) {
-      ip[i] = Byte.valueOf(sSplit[i]);
+    	ip[i] = (byte) Integer.parseInt(sSplit[i]);
     }
 
     return ip;
@@ -315,25 +318,38 @@ public class DnsClient {
 
   // Helper method to generate alias string from array of bytes
   public static String getName(byte[] data, int j, String alias) {
-
-    while (data[j] != 0) {
-      // If compressed data
-      if (data[j] == -64) {
-        alias += getName(data, data[j+1], "");
-        j += 2;
-      }
-      else {
-        int length = Byte.toUnsignedInt(data[j]);
-        j++;
-        while (length > 0) {
-          alias += (char) data[j];
-          j++;
-          length--;
-        }
-        alias += ".";
-      }
-    } 
-    return alias;
+	  
+	  while (data[j] != 0) {
+		
+		System.out.println("Data at "+j+" is "+ data[j]);
+      	// Compressed data
+      	if (data[j] == -64) {
+      	  int k = data[j + 1];
+      	  while (data[k] != 0 && data[k] != -64) {
+      		int innerLength = Byte.toUnsignedInt(data[k]);
+      	  	k++;
+      	  	while (innerLength > 0) {
+      	  	  alias += (char) data[k];
+      	  	  k++;
+      	  	  innerLength--;
+      	  	}
+      	  	alias += ".";
+      	  }
+      		  //alias += getName(data, data[j+1], "");
+      	  return alias;
+      	}
+      	else {
+          int length = Byte.toUnsignedInt(data[j]);
+      	  j++;
+      	  while (length > 0) {
+      	    alias += (char) data[j];
+      		j++;
+      		length--;
+      	  }
+      	  alias += ".";
+      	}
+	  } 
+	  return alias;
   }  
   
   // error handling helper method
