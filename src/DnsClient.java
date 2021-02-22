@@ -337,9 +337,7 @@ public class DnsClient {
   // Helper method to generate alias string from array of bytes
   public static String getName(byte[] data, int j, String alias) {
 	  
-	  while (data[j] != 0) {
-		
-		System.out.println("Data at "+j+" is "+ data[j]);
+	  while (data[j] != 0) {		
       	// Compressed data
       	if (data[j] == -64) {
       	  int k = data[j + 1];
