@@ -301,7 +301,7 @@ public class DnsClient {
 
     byte[] ip = new byte[4];
     for(int i = 0; i < sSplit.length; i++) {
-      ip[i] = Byte.valueOf(sSplit[i]);
+    	ip[i] = (byte) Integer.parseInt(sSplit[i]);
     }
 
     return ip;
