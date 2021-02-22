@@ -149,7 +149,7 @@ public class DnsClient {
       // No need for other sections of packet?
       
       // Send the created packet
-      byte[] receiveDNSbytes = new byte[128]; // Unsure about size
+      byte[] receiveDNSbytes = new byte[300]; // Unsure about size
       DatagramPacket sendPacket = 
     		  new DatagramPacket(sendDNSbytes, sendDNSbytes.length, address, port);
       DatagramPacket receivePacket = 
@@ -206,6 +206,7 @@ public class DnsClient {
 	    	// Move to QTYPE bit
 	    	while (data[i] != 0) i++;
 	    	i++;
+	    	if (data[i - 3] != -64) i+=3;
 
 	    	// Get the "seconds can cache" 
 	    	byte[] TTLBytes = new byte[4];
@@ -284,11 +285,23 @@ public class DnsClient {
   public static String getName(byte[] data, int j, String alias) {
 	  
 	  while (data[j] != 0) {
-		  
+		
+		System.out.println("Data at "+j+" is "+ data[j]);
       	// Compressed data
       	if (data[j] == -64) {
-      	  alias += getName(data, data[j+1], "");
-      	  j += 2;
+      	  int k = data[j + 1];
+      	  while (data[k] != 0 && data[k] != -64) {
+      		int innerLength = Byte.toUnsignedInt(data[k]);
+      	  	k++;
+      	  	while (innerLength > 0) {
+      	  	  alias += (char) data[k];
+      	  	  k++;
+      	  	  innerLength--;
+      	  	}
+      	  	alias += ".";
+      	  }
+      		  //alias += getName(data, data[j+1], "");
+      	  return alias;
       	}
       	else {
           int length = Byte.toUnsignedInt(data[j]);
