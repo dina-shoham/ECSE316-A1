@@ -20,6 +20,12 @@ public class DnsClient {
 
     // parsing arguments
     int i;
+    
+    if(args.length < 2) {
+      System.out.println("ERROR: Incorrect input syntax");
+      return;
+    }
+    
     for(i = 0; i < args.length; i++) {
       if(args[i].contains("-t")) {
         timeout = Integer.parseInt(args[i+1]) * 1000; // convert to milliseconds
@@ -60,7 +66,10 @@ public class DnsClient {
         }
         QNAME_size++; 
       }
-      else System.out.println("ERROR \tIncorrect input syntax");
+      else {
+        System.out.println("ERROR \tIncorrect input syntax");
+        return;
+      }
     }
 
     System.out.println("DnsClient sending request for "+name+"\nServer: "+args[i-2]+"\nRequest type: "+serverType);
@@ -274,7 +283,7 @@ public class DnsClient {
           i += 11;
           break;
         default:
-          System.out.println("no valid type detected"); //TODO error
+          System.out.println("ERROR: no valid type detected"); 
       }
     }
 
