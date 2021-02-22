@@ -1,8 +1,8 @@
 import java.io.*;
 import java.net.*;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Random;
-
 
 public class DnsClient {
   public static int timeout = 5000;
@@ -132,7 +132,7 @@ public class DnsClient {
     	  sendDNSbytes[index] = (byte) 0x0f; 
     	  index++;
       }
-      else if (serverType.equals("NX")) {
+      else if (serverType.equals("NS")) {
     	  sendDNSbytes[index] = (byte) 0x02; 
     	  index++;
       }
@@ -149,7 +149,7 @@ public class DnsClient {
       // No need for other sections of packet?
       
       // Send the created packet
-      byte[] receiveDNSbytes = new byte[1024]; // Unsure about size
+      byte[] receiveDNSbytes = new byte[128]; // Unsure about size
       DatagramPacket sendPacket = 
     		  new DatagramPacket(sendDNSbytes, sendDNSbytes.length, address, port);
       DatagramPacket receivePacket = 
@@ -180,41 +180,127 @@ public class DnsClient {
   }
   
   public static void receiveResponse(byte[] data) {
-    int numAnswers = ((data[6] & 0xff) << 8) + (data[7] & 0xff);;
+    int numAnswers = ((data[6] & 0xff) << 8) + (data[7] & 0xff);
     System.out.println("***Answer Section ("+numAnswers+" records)***");
     
     System.out.println(Arrays.toString(data));
     
-    byte responseType = data[16 + QNAME_size];
-    switch(responseType) {
-      case 0x01: 
-        //type A
-        System.out.println("A");
-        break;
-      case 0x02: 
-        //type NS
-        System.out.println("NS");
-        break;
-      case 0x05:
-        //type CNAME
-        System.out.println("CNAME");
-        break;
-      case 0x0f:
-        //type MX
-        System.out.println("MX");
-        break;
-      default:
-        System.out.println("no valid type detected"); //TODO error
-        
-    }
+    // Start at index of answer
+    int i = 16 + QNAME_size;
     
-    /*
-     * P <tab> [ip address] <tab> [seconds can cache] <tab> [auth | nonauth]
-        CNAME <tab> [alias] <tab> [seconds can cache] <tab> [auth | nonauth]
-        MX <tab> [alias] <tab> [pref] <tab> [seconds can cache] <tab> [auth | nonauth] 
-        NS <tab> [alias] <tab> [seconds can cache] <tab> [auth | nonauth]
-     */
+    i = analyzeResponse(numAnswers, i, data);
     
-  }
+    int numAdditional = ((data[10] & 0xff) << 8) + (data[11] & 0xff);
+    
+    if (numAdditional == 0) System.out.println("NOTFOUND");
+    else {
+    	System.out.println("***Additional Section ("+numAdditional+" records)***");
+    	analyzeResponse(numAdditional,i, data);
+    }  
+  }    
   
+  public static int analyzeResponse(int numAnswers, int i, byte[] data) {
+	  
+	  for (int responseIndex = 0; responseIndex < numAnswers; responseIndex++) {
+
+	    	// Move to QTYPE bit
+	    	while (data[i] != 0) i++;
+	    	i++;
+
+	    	// Get the "seconds can cache" 
+	    	byte[] TTLBytes = new byte[4];
+	    	TTLBytes[0] = data[i+3];
+	    	TTLBytes[1] = data[i+4];
+	    	TTLBytes[2] = data[i+5];
+	    	TTLBytes[3] = data[i+6];
+	    	int TTL = ByteBuffer.wrap(TTLBytes).getInt();
+
+	    	// Check if authoritative
+	    	int AA = (data[2] >> 5) & 1;
+	    	String auth = "";
+	    	if (AA == 0) auth += "nonauth";
+	    	else auth += "auth";
+
+	    	switch(data[i]) {
+	    	case 1: 
+	    		//type A
+	    		System.out.println("A");
+	    		System.out.println("IP\t"
+	    				+Byte.toUnsignedInt(data[i+9])+"."
+	    				+Byte.toUnsignedInt(data[i+10])+"."
+	    				+Byte.toUnsignedInt(data[i+11])+"."
+	    				+Byte.toUnsignedInt(data[i+12])
+	    				+"\tseconds can cache\t"+TTL+"\t"+auth);
+	    		i += 9;
+	    		break;
+	    	case 2: 
+	    		//type NS
+	    		System.out.println("NS");
+
+	    		String name = "";
+	    		int j = i + 9;
+
+	    		name += getName(data, j, "");
+
+	    		System.out.println("NS\t"+name.substring(0, (name.length() - 1))+"\tseconds can cache\t"+TTL+"\t"+auth);
+	    		i += 9;
+	    		break;
+	    	case 5:
+	    		//type CNAME
+	    		System.out.println("CNAME");
+
+	    		String alias = "";
+	    		int j2 = i + 9;
+
+	    		alias += getName(data, j2, "");
+
+	    		System.out.println("CNAME\t"+alias.substring(0, (alias.length() - 1))+"\tseconds can cache\t"+TTL+"\t"+auth);
+	    		i += 9;
+	    		break;
+	    	case 15:
+	    		//type MX
+	    		System.out.println("MX");
+
+	    		// Getting pref
+	    		int pref = Byte.toUnsignedInt(data[i+9])*256 + Byte.toUnsignedInt(data[i+10]);
+
+	    		// Getting the alias
+	    		String alias2 = "";
+	    		int j3 = i + 11;
+	    		alias2 += getName(data, j3, "");
+
+	    		System.out.println("MX\t"+alias2.substring(0, (alias2.length() - 1))+"\t"+pref+"\tseconds can cache\t"+TTL+"\t"+auth);
+	    		i += 11;
+	    		break;
+	    	default:
+	    		System.out.println("no valid type detected"); //TODO error
+	    	}
+	  }
+	  
+	  return i;
+  }
+
+  // Helper method to generate alias
+  public static String getName(byte[] data, int j, String alias) {
+	  
+	  while (data[j] != 0) {
+		  
+      	// Compressed data
+      	if (data[j] == -64) {
+      	  alias += getName(data, data[j+1], "");
+      	  j += 2;
+      	}
+      	else {
+          int length = Byte.toUnsignedInt(data[j]);
+      	  j++;
+      	  while (length > 0) {
+      	    alias += (char) data[j];
+      		j++;
+      		length--;
+      	  }
+      	  alias += ".";
+      	}
+	  } 
+	  return alias;
+  }  
 }
